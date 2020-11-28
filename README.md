@@ -17,6 +17,19 @@ Small utility to help our team work with all our projects dotenv files.
 brew install kinoba/dotenv-op/dotenv-op
 ```
 
+### Manually
+
+- Change the following script variables according to your situation:
+
+```
+ONEPASSWORD_VAULT="[VAULT_NAME]"
+ONEPASSWORD_ACCOUNT_SUBDOMAIN="[1P Account name]"
+ONEPASSWORD_ACCOUNT_URL="https://$ONEPASSWORD_ACCOUNT_SUBDOMAIN.1password.eu"
+ONEPASSWORD_ACCOUNT_EMAIL="[yourmeail@domaine.com]@$ONEPASSWORD_ACCOUNT_SUBDOMAIN.fr"
+```
+
+- Place this script wherever you want in your PATH
+
 ## Usage
 
 ### Get a dotenv
