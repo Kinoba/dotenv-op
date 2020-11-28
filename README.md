@@ -1,5 +1,7 @@
 # dotenv-op
 
+![Lint](https://github.com/Kinoba/dotenv-op/workflows/Lint/badge.svg)
+
 Small utility to help our team work with all our projects dotenv files.
 
 ## Requirements 
