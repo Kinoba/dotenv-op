@@ -1,23 +1,21 @@
 #!/bin/bash
 
-ONEPASSWORD_VAULT="Dotenv"
-ONEPASSWORD_ACCOUNT_SUBDOMAIN="kinoba"
+ONEPASSWORD_VAULT=$DOTENVOP_VAULT
+ONEPASSWORD_ACCOUNT_SUBDOMAIN=$DOTENVOP_ACCOUNT
+ONEPASSWORD_ACCOUNT_EMAIL=$DOTENVOP_EMAIL
 ONEPASSWORD_ACCOUNT_URL="https://$ONEPASSWORD_ACCOUNT_SUBDOMAIN.1password.eu"
-ONEPASSWORD_ACCOUNT_EMAIL="gregoire@$ONEPASSWORD_ACCOUNT_SUBDOMAIN.fr"
 
 check_op() {
-  if ! command -v op &> /dev/null
-  then
-      echo "op could not be found, please install the 1Password CLI"
-      return 1
+  if ! command -v op &> /dev/null; then
+    echo "op could not be found, please install the 1Password CLI first"
+    return 1
   fi
 }
 
 check_op_signin() {
-  if op get documents list | grep -q ERROR
-  then
-    if eval "$(op signin "$ONEPASSWORD_ACCOUNT_SUBDOMAIN")" | grep -q ERROR
-    then
+  if op get account 2>&1 >/dev/null | grep -q ERROR; then
+    eval "$(op signin $ONEPASSWORD_ACCOUNT_SUBDOMAIN)"
+    if op get account 2>&1 >/dev/null | grep -q ERROR; then
       printf "\nPlease run:\n\nop signin %s\n\n" "$ONEPASSWORD_ACCOUNT_URL $ONEPASSWORD_ACCOUNT_EMAIL "
       return 1;
     fi
