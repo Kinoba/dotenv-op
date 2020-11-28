@@ -14,7 +14,7 @@ check_op() {
 
 check_op_signin() {
   if op get account 2>&1 >/dev/null | grep -q ERROR; then
-    eval "$(op signin $ONEPASSWORD_ACCOUNT_SUBDOMAIN)"
+    eval "$(op signin "$ONEPASSWORD_ACCOUNT_SUBDOMAIN")"
     if op get account 2>&1 >/dev/null | grep -q ERROR; then
       printf "\nPlease run:\n\nop signin %s\n\n" "$ONEPASSWORD_ACCOUNT_URL $ONEPASSWORD_ACCOUNT_EMAIL "
       return 1;
