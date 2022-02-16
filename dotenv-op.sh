@@ -16,10 +16,14 @@ check_op_signin() {
   if op get account 2>&1 >/dev/null | grep -q ERROR; then
     eval "$(op signin "$ONEPASSWORD_ACCOUNT_SUBDOMAIN")"
     if op get account 2>&1 >/dev/null | grep -q ERROR; then
-      printf "\nPlease run:\n\nop signin %s\n\n" "$ONEPASSWORD_ACCOUNT_URL $ONEPASSWORD_ACCOUNT_EMAIL "
-      return 1;
+      printf "\nPlease run:\n\nop signin %s\n\n" "$ONEPASSWORD_ACCOUNT_URL $ONEPASSWORD_ACCOUNT_EMAIL"
+      exit 1;
     fi
   fi
+}
+
+document_filename() {
+  echo "[$PROJECT] $ENVIRONMENT"
 }
 
 dot_env_filename() {
@@ -27,9 +31,9 @@ dot_env_filename() {
 }
 
 usage() {
-cat << EOT
+  cat << EOT
 
-  usage $0 [-h] get|create|edit -p project -e environment
+  usage $0 [-h] get|create|edit -p project -e environment -v vault
 
   MANDATORY
     get                            : print 1Password file to stdout
@@ -40,8 +44,23 @@ cat << EOT
     -h show this usage
     -p specify project
     -e specify environement (production/staging)
+    -v specify vault (overrides ONEPASSWORD_VAULT)
     
 EOT
+}
+
+handle_response() {
+  readonly response=$1
+  
+  [[ "$response" != *ERROR* ]] && printf "\n\n%s\n\n" "$response" && exit 0
+
+  if [[ "$response" == *"doesn't seem to be a vault in this account"* ]]; then
+    printf "\nVault \"$VAULT\" does not exist. Available vaults are:\n\n%s\n" "$(op list vaults --cache | jq -r '.[].name')"
+    exit 1
+  fi
+
+  echo "Unknown response: $response"
+  exit 1
 }
 
 main() {
@@ -49,25 +68,29 @@ main() {
   check_op_signin
 
   if [ -z "$ACTION" ] || [ -z "$PROJECT" ] || [ -z "$ENVIRONMENT" ]; then usage; exit 1; fi
+  [[ -z "$VAULT" ]] && VAULT=$ONEPASSWORD_VAULT
+
+  [[ -z "$DOCUMENT_NAME" ]] && DOCUMENT_NAME="$(dot_env_filename)"
 
   if [ "$ACTION" = get ]; then
-    printf "%s\n\n" "$(op "$ACTION" document "$(dot_env_filename)" --vault "$ONEPASSWORD_VAULT")"
+    response=$(printf "%s\n\n" "$(op "$ACTION" document "$DOCUMENT_NAME" --vault "$VAULT" 2>&1)")
   elif [ "$ACTION" = create ]; then
-    op "$ACTION" document "$LOCAL_DOT_ENV" --filename "$(dot_env_filename)" --vault "$ONEPASSWORD_VAULT"
+    response=$(op "$ACTION" document "$LOCAL_DOT_ENV" --filename "$DOCUMENT_NAME" --vault "$VAULT" 2>&1)
   elif [ "$ACTION" = edit ]; then
-    op "$ACTION" document "$(dot_env_filename)" "$LOCAL_DOT_ENV" --filename "$(dot_env_filename)" --vault "$ONEPASSWORD_VAULT"
+    response=$(op "$ACTION" document "$DOCUMENT_NAME" "$LOCAL_DOT_ENV" --filename "$DOCUMENT_NAME" --vault "$VAULT" 2>&1)
   fi
+
+  handle_response "$response"
 }
 
 ACTION=""
 LOCAL_DOT_ENV=""
 PROJECT=""
 ENVIRONMENT=""
+VAULT=""
+DOCUMENT_NAME=""
 
-if [[ $# -eq 0 ]] ; then
-  usage
-  exit 1
-fi
+[[ $# -eq 0 ]] && usage && exit 1
 
 if [[ $1 == "get" ]] || [[ $1 == "create" ]] || [[ $1 == "edit" ]] ; then
   ACTION="$1"
@@ -77,7 +100,7 @@ else
   exit 1
 fi
 
-while getopts "hf:p:e:" opt; do
+while getopts "hf:p:e:v:n:" opt; do
   case $opt in
     f) LOCAL_DOT_ENV="$OPTARG"
     ;;
@@ -88,6 +111,10 @@ while getopts "hf:p:e:" opt; do
     p) PROJECT="$(echo "$OPTARG" | tr "[:lower:]" "[:upper:]")"
     ;;
     e) ENVIRONMENT="$OPTARG"
+    ;;
+    v) VAULT="$OPTARG"
+    ;;
+    n) DOCUMENT_NAME="$OPTARG"
     ;;
     \?) 
       echo "Invalid option -$OPTARG" >&2
