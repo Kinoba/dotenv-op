@@ -44,7 +44,8 @@ usage() {
     -h show this usage
     -p specify project
     -e specify environement (production/staging)
-    -v specify vault (overrides ONEPASSWORD_VAULT)
+    -v [OPTIONAL] specify vault (overrides ONEPASSWORD_VAULT)
+    -n [OPTIONAL] specify name of the document 
     
 EOT
 }
