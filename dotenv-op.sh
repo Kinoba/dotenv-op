@@ -88,9 +88,16 @@ main() {
     op get document "$DOCUMENT_NAME" --vault "$VAULT" --output "$tmpFile"
 
     [[ -s "$tmpFile" ]] || exit 1
-
     ${VISUAL:-${EDITOR:-vim}} "$tmpFile"
-    response=$(op edit document "$DOCUMENT_NAME" "$tmpFile" --filename "$DOCUMENT_NAME" --vault "$VAULT" 2>&1)
+
+    while true; do
+      read -rp "Press Y to upload the edited document, E to continue editing: " ye
+      case $ye in
+        [Yy]* ) response=$(op edit document "$DOCUMENT_NAME" "$tmpFile" --filename "$DOCUMENT_NAME" --vault "$VAULT" 2>&1); break;;
+        [Ee]* ) ${VISUAL:-${EDITOR:-vim}} "$tmpFile";;
+        * ) echo "Please answer y or e.";;
+      esac
+    done
   fi
 
   handle_response "$response"
