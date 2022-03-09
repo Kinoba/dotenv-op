@@ -50,3 +50,11 @@ dotenv-op get -p project_name -e production
 ./dotenv-op edit -p project_name -e production -f /path/to/your/project_name/.env.production
 ```
 
+### Edit a dotenv directly inside your terminal
+
+This will download the existing document on 1Password and open your favorite editor to edit it.
+
+```
+./dotenv-op edit-inline -p project_name -e production
+```
+

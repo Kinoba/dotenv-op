@@ -33,12 +33,13 @@ dot_env_filename() {
 usage() {
   cat << EOT
 
-  usage $0 [-h] get|create|edit -p project -e environment -v vault
+  usage $0 [-h] get|create|edit|edit-inline -p project -e environment -v vault
 
   MANDATORY
     get                            : print 1Password file to stdout
     create [-f local_dot_env_path] : create a new 1Password entry with local_dot_env_path
     edit   [-f local_dot_env_path] : update the existing local_dot_env_path 1Password entry
+    edit-inline : update a document directly in the terminal
 
   OPTIONS
     -h show this usage
@@ -53,7 +54,8 @@ EOT
 handle_response() {
   readonly response=$1
   
-  [[ "$response" != *ERROR* ]] && printf "\n\n%s\n\n" "$response" && exit 0
+  [[ "$ACTION" = edit ]] || [[ "$ACTION" = edit-inline ]] && printf "\n%s successfully edited" "$DOCUMENT_NAME"
+  [[ "$response" != *ERROR* ]] && printf "\n\n%s\n" "$response" && exit 0
 
   if [[ "$response" == *"doesn't seem to be a vault in this account"* ]]; then
     printf "\nVault \"$VAULT\" does not exist. Available vaults are:\n\n%s\n" "$(op list vaults --cache | jq -r '.[].name')"
@@ -73,12 +75,22 @@ main() {
 
   [[ -z "$DOCUMENT_NAME" ]] && DOCUMENT_NAME="$(dot_env_filename)"
 
-  if [ "$ACTION" = get ]; then
+  if [[ "$ACTION" = get ]]; then
     response=$(printf "%s\n\n" "$(op "$ACTION" document "$DOCUMENT_NAME" --vault "$VAULT" 2>&1)")
-  elif [ "$ACTION" = create ]; then
+  elif [[ "$ACTION" = create ]]; then
     response=$(op "$ACTION" document "$LOCAL_DOT_ENV" --filename "$DOCUMENT_NAME" --vault "$VAULT" 2>&1)
-  elif [ "$ACTION" = edit ]; then
+  elif [[ "$ACTION" = edit ]]; then
     response=$(op "$ACTION" document "$DOCUMENT_NAME" "$LOCAL_DOT_ENV" --filename "$DOCUMENT_NAME" --vault "$VAULT" 2>&1)
+  elif [[ "$ACTION" = edit-inline ]]; then
+    tmpFile=$(mktemp) || exit 1
+    trap 'rm -f "$tmpFile"' EXIT
+
+    op get document "$DOCUMENT_NAME" --vault "$VAULT" --output "$tmpFile"
+
+    [[ -s "$tmpFile" ]] || exit 1
+
+    ${VISUAL:-${EDITOR:-vim}} "$tmpFile"
+    response=$(op edit document "$DOCUMENT_NAME" "$tmpFile" --filename "$DOCUMENT_NAME" --vault "$VAULT" 2>&1)
   fi
 
   handle_response "$response"
@@ -93,7 +105,7 @@ DOCUMENT_NAME=""
 
 [[ $# -eq 0 ]] && usage && exit 1
 
-if [[ $1 == "get" ]] || [[ $1 == "create" ]] || [[ $1 == "edit" ]] ; then
+if [[ $1 == "get" ]] || [[ $1 == "create" ]] || [[ $1 == "edit" ]] || [[ $1 == "edit-inline" ]] ; then
   ACTION="$1"
   shift
 else
