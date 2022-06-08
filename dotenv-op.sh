@@ -6,20 +6,34 @@ ONEPASSWORD_ACCOUNT_EMAIL=$DOTENVOP_EMAIL
 ONEPASSWORD_ACCOUNT_URL="https://$ONEPASSWORD_ACCOUNT_SUBDOMAIN.1password.eu"
 
 check_op() {
+  # Check if CLI is installed
   if ! command -v op &> /dev/null; then
     echo "op could not be found, please install the 1Password CLI first"
-    return 1
+    exit 1
   fi
+
+  # Check if CLI version is greater or equal to 2
+  op_version=$(op -v)
+  [[ "${op_version:0:1}" -lt 2 ]] && echo "Install or update op CLI version > 2" && exit 1
 }
 
 check_op_signin() {
-  if op get account 2>&1 >/dev/null | grep -q ERROR; then
-    eval "$(op signin "$ONEPASSWORD_ACCOUNT_SUBDOMAIN")"
-    if op get account 2>&1 >/dev/null | grep -q ERROR; then
-      printf "\nPlease run:\n\nop signin %s\n\n" "$ONEPASSWORD_ACCOUNT_URL $ONEPASSWORD_ACCOUNT_EMAIL"
+  session=$(cat "$HOME/.config/op/session" 2> /dev/null)
+  if ! op account get --session="$session" &> /dev/null; then
+    echo ""
+    signin
+    session=$(cat "$HOME/.config/op/session")
+    if ! op account get --session="$session" &> /dev/null; then
+      printf "\nPlease run:\n\nop signin --account %s\n\n" "$ONEPASSWORD_ACCOUNT_URL $ONEPASSWORD_ACCOUNT_EMAIL"
       exit 1;
     fi
   fi
+}
+
+signin() {
+  token=$(op signin -f --raw --account "$ONEPASSWORD_ACCOUNT_SUBDOMAIN")
+
+  echo "$token" > "$HOME/.config/op/session"
 }
 
 document_filename() {
@@ -30,23 +44,39 @@ dot_env_filename() {
   echo "[$PROJECT] .env.$ENVIRONMENT"
 }
 
+download_document_to_temp_location() {
+  tmpFile=$(mktemp) || exit 1
+  trap 'rm -f "$tmpFile"' EXIT
+
+  # Download the document to a temporary location
+  op document get "$DOCUMENT_NAME" \
+    --vault "$VAULT" \
+    --output "$tmpFile" \
+     --session="$session"
+
+  # Check if the document exists locally and has a size greater than 0
+  ! [[ -s "$tmpFile" ]] && echo "Remote document could not be downloaded locally" && exit 1
+}
+
 usage() {
   cat << EOT
 
-  usage $0 [-h] get|create|edit|edit-inline -p project -e environment -v vault
+  usage $0 ACTION OPTIONS
 
-  MANDATORY
-    get                            : print 1Password file to stdout
-    create [-f local_dot_env_path] : create a new 1Password entry with local_dot_env_path
-    edit   [-f local_dot_env_path] : update the existing local_dot_env_path 1Password entry
-    edit-inline : update a document directly in the terminal
+  ACTION (MANDATORY)
+    compare      : compare local document to the one in 1Password
+    create       : create a new 1Password entry with local document
+    edit         : update the existing document in 1Password based on local document
+    edit-inline  : update a document directly in the terminal
+    get          : print 1Password file to stdout
 
   OPTIONS
+    -e specify environement (production/staging)
+    -f specify local document path
     -h show this usage
     -p specify project
-    -e specify environement (production/staging)
-    -v [OPTIONAL] specify vault (overrides ONEPASSWORD_VAULT)
     -n [OPTIONAL] specify name of the document 
+    -v [OPTIONAL] specify vault (overrides ONEPASSWORD_VAULT)
     
 EOT
 }
@@ -55,10 +85,10 @@ handle_response() {
   readonly response=$1
   
   [[ "$ACTION" = edit ]] || [[ "$ACTION" = edit-inline ]] && printf "\n%s successfully edited" "$DOCUMENT_NAME"
-  [[ "$response" != *ERROR* ]] && printf "\n\n%s\n" "$response" && exit 0
+  [[ "$response" != *ERROR* ]] && printf "\n\n%s\n\n" "$response" && exit 0
 
-  if [[ "$response" == *"doesn't seem to be a vault in this account"* ]]; then
-    printf "\nVault \"$VAULT\" does not exist. Available vaults are:\n\n%s\n" "$(op list vaults --cache | jq -r '.[].name')"
+  if [[ "$response" == *"isn't a vault in this account"* ]]; then
+    printf "\nVault \"$VAULT\" does not exist. Available vaults are:\n\n%s\n" "$(op vault list --format json --session="$session" | jq -r '.[].name')"
     exit 1
   fi
 
@@ -76,29 +106,40 @@ main() {
   [[ -z "$DOCUMENT_NAME" ]] && DOCUMENT_NAME="$(dot_env_filename)"
 
   if [[ "$ACTION" = get ]]; then
-    response=$(printf "%s\n\n" "$(op "$ACTION" document "$DOCUMENT_NAME" --vault "$VAULT" 2>&1)")
+    response=$(printf "%s\n\n" "$(op document "$ACTION" "$DOCUMENT_NAME" --vault "$VAULT" --session="$session" 2>&1)")
   elif [[ "$ACTION" = create ]]; then
-    response=$(op "$ACTION" document "$LOCAL_DOT_ENV" --filename "$DOCUMENT_NAME" --vault "$VAULT" 2>&1)
+    response=$(op document "$ACTION" "$LOCAL_DOT_ENV" --file-name "$DOCUMENT_NAME" --vault "$VAULT" --session="$session" 2>&1)
   elif [[ "$ACTION" = edit ]]; then
-    response=$(op "$ACTION" document "$DOCUMENT_NAME" "$LOCAL_DOT_ENV" --filename "$DOCUMENT_NAME" --vault "$VAULT" 2>&1)
+    response=$(op document "$ACTION" "$DOCUMENT_NAME" "$LOCAL_DOT_ENV" --file-name "$DOCUMENT_NAME" --vault "$VAULT" --session="$session" 2>&1)
   elif [[ "$ACTION" = edit-inline ]]; then
-    tmpFile=$(mktemp) || exit 1
-    trap 'rm -f "$tmpFile"' EXIT
-
-    op get document "$DOCUMENT_NAME" --vault "$VAULT" --output "$tmpFile"
-
-    [[ -s "$tmpFile" ]] || exit 1
+    download_document_to_temp_location
     ${VISUAL:-${EDITOR:-vim}} "$tmpFile"
 
     while true; do
-      read -rp "Press Y to upload the edited document, E to continue editing: " ye
-      case $ye in
-        [Yy]* ) response=$(op edit document "$DOCUMENT_NAME" "$tmpFile" --filename "$DOCUMENT_NAME" --vault "$VAULT" 2>&1); break;;
+      printf "\nPress\n - Y to upload the edited document\n - V to view the edited document\n - E to continue editing\n - C to cancel\n\n"
+      read -rp ": " subaction
+      case $subaction in
+        [Yy]* ) response=$(op document edit "$DOCUMENT_NAME" "$tmpFile" --file-name "$DOCUMENT_NAME" --vault "$VAULT" --session="$session" 2>&1); break;;
+        [Vv]* ) cat "$tmpFile";;
         [Ee]* ) ${VISUAL:-${EDITOR:-vim}} "$tmpFile";;
-        * ) echo "Please answer y or e.";;
+        [Cc]* ) break;;
+        * ) echo "";;
       esac
     done
+  elif [[ "$ACTION" = compare ]]; then
+    download_document_to_temp_location
+    ! [[ -s "$LOCAL_DOT_ENV" ]] && printf "Local document %s not found\n" "$LOCAL_DOT_ENV" && exit 1
+
+    # Remove new lines and white spaces before comparing the two files
+    if cmp --silent <( tr -d ' \n' <"$LOCAL_DOT_ENV" ) <( tr -d ' \n' <"$tmpFile" ); then
+      response="Documents are identical"
+    else
+      response="Documents are different"
+    fi
   fi
+
+  # Early exit if the user canceled the main action
+  [[ "$subaction" == c ]] && exit 0
 
   handle_response "$response"
 }
@@ -112,7 +153,7 @@ DOCUMENT_NAME=""
 
 [[ $# -eq 0 ]] && usage && exit 1
 
-if [[ $1 == "get" ]] || [[ $1 == "create" ]] || [[ $1 == "edit" ]] || [[ $1 == "edit-inline" ]] ; then
+if [[ $1 == get ]] || [[ $1 == create ]] || [[ $1 == edit ]] || [[ $1 == edit-inline ]] || [[ $1 == compare ]] ; then
   ACTION="$1"
   shift
 else
@@ -122,19 +163,19 @@ fi
 
 while getopts "hf:p:e:v:n:" opt; do
   case $opt in
+    e) ENVIRONMENT="$OPTARG"
+    ;;
     f) LOCAL_DOT_ENV="$OPTARG"
     ;;
     h) 
       usage
       exit 0
     ;;
+    n) DOCUMENT_NAME="$OPTARG"
+    ;;
     p) PROJECT="$(echo "$OPTARG" | tr "[:lower:]" "[:upper:]")"
     ;;
-    e) ENVIRONMENT="$OPTARG"
-    ;;
     v) VAULT="$OPTARG"
-    ;;
-    n) DOCUMENT_NAME="$OPTARG"
     ;;
     \?) 
       echo "Invalid option -$OPTARG" >&2
@@ -144,7 +185,8 @@ while getopts "hf:p:e:v:n:" opt; do
   esac
 done
 
-shift $((OPTIND-1))
+# Remove all options specified in the while getopts loop
+shift "$((OPTIND-1))"
 
 main
 
