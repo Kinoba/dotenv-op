@@ -36,10 +36,6 @@ signin() {
   echo "$token" > "$HOME/.config/op/session"
 }
 
-document_filename() {
-  echo "[$PROJECT] $ENVIRONMENT"
-}
-
 dot_env_filename() {
   echo "[$PROJECT] .env.$ENVIRONMENT"
 }
@@ -100,7 +96,7 @@ handle_response() {
 
 main() {
   if [[ "$ACTION" = version ]]; then
-    echo "dotenv-op v1.1.0"
+    echo "dotenv-op v1.1.1"
     exit 0
   fi
 
