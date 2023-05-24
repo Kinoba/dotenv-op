@@ -83,7 +83,7 @@ handle_response() {
   readonly response=$1
   
   [[ "$ACTION" = edit ]] || [[ "$ACTION" = edit-inline ]] && printf "\n%s successfully edited" "$DOCUMENT_NAME"
-  [[ "$response" != *ERROR* ]] && printf "\n\n%s\n\n" "$response" && exit 0
+  ! [[ "$response" =~ .*\[ERROR\].* ]] && printf "\n\n%s\n\n" "$response" && exit 0
 
   if [[ "$response" == *"isn't a vault in this account"* ]]; then
     printf "\nVault \"$VAULT\" does not exist. Available vaults are:\n\n%s\n" "$(op vault list --format json --session="$session" | jq -r '.[].name')"
