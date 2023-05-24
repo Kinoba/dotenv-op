@@ -69,6 +69,8 @@ usage() {
     edit         : update the existing document in 1Password based on local document
     edit-inline  : update a document directly in the terminal
     get          : print 1Password file to stdout
+    help         : print this menu
+    version      : print dotenv-op version
 
   OPTIONS
     -e specify environement (production/staging)
@@ -97,6 +99,11 @@ handle_response() {
 }
 
 main() {
+  if [[ "$ACTION" = version ]]; then
+    echo "dotenv-op v1.1.0"
+    exit 0
+  fi
+
   check_op
   check_op_signin
 
@@ -153,7 +160,7 @@ DOCUMENT_NAME=""
 
 [[ $# -eq 0 ]] && usage && exit 1
 
-if [[ $1 == get ]] || [[ $1 == create ]] || [[ $1 == edit ]] || [[ $1 == edit-inline ]] || [[ $1 == compare ]] ; then
+if [[ $1 == get ]] || [[ $1 == create ]] || [[ $1 == edit ]] || [[ $1 == edit-inline ]] || [[ $1 == compare ]] || [[ $1 == version ]] ; then
   ACTION="$1"
   shift
 else
