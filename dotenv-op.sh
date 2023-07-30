@@ -111,9 +111,9 @@ main() {
   if [[ "$ACTION" = get ]]; then
     response=$(printf "%s\n\n" "$(op document "$ACTION" "$DOCUMENT_NAME" --vault "$VAULT" --session="$session" 2>&1)")
   elif [[ "$ACTION" = create ]]; then
-    response=$(op document "$ACTION" "$LOCAL_DOT_ENV" --file-name "$DOCUMENT_NAME" --vault "$VAULT" --session="$session" 2>&1)
+    response=$(op document "$ACTION" "$LOCAL_DOT_ENV" --file-name "$DOCUMENT_NAME.txt" --title "$DOCUMENT_NAME" --vault "$VAULT" --session="$session" 2>&1)
   elif [[ "$ACTION" = edit ]]; then
-    response=$(op document "$ACTION" "$DOCUMENT_NAME" "$LOCAL_DOT_ENV" --file-name "$DOCUMENT_NAME" --vault "$VAULT" --session="$session" 2>&1)
+    response=$(op document "$ACTION" "$DOCUMENT_NAME" "$LOCAL_DOT_ENV" --file-name "$DOCUMENT_NAME.txt" --title "$DOCUMENT_NAME" --vault "$VAULT" --session="$session" 2>&1)
   elif [[ "$ACTION" = edit-inline ]]; then
     download_document_to_temp_location
     ${VISUAL:-${EDITOR:-vim}} "$tmpFile"
@@ -122,7 +122,7 @@ main() {
       printf "\nPress\n - Y to upload the edited document\n - V to view the edited document\n - E to continue editing\n - C to cancel\n\n"
       read -rp ": " subaction
       case $subaction in
-        [Yy]* ) response=$(op document edit "$DOCUMENT_NAME" "$tmpFile" --file-name "$DOCUMENT_NAME" --vault "$VAULT" --session="$session" 2>&1); break;;
+        [Yy]* ) response=$(op document edit "$DOCUMENT_NAME" "$tmpFile" --file-name "$DOCUMENT_NAME.txt" --title "$DOCUMENT_NAME" --vault "$VAULT" --session="$session" 2>&1); break;;
         [Vv]* ) cat "$tmpFile";;
         [Ee]* ) ${VISUAL:-${EDITOR:-vim}} "$tmpFile";;
         [Cc]* ) break;;
